@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/uikamu/pomodoro-tui/internal/config"
+	"github.com/uikamu/pomodoro-tui/internal/notify"
 	"github.com/uikamu/pomodoro-tui/internal/storage"
 )
 
@@ -218,8 +219,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case " ", "x":
 				if m.store != nil && m.taskCur < len(m.tasks) {
-					_ = m.store.ToggleTask(m.tasks[m.taskCur].ID)
+					task := m.tasks[m.taskCur]
+					_ = m.store.ToggleTask(task.ID)
 					m.tasks, _ = m.store.ListTasks()
+					if !task.Done {
+						go notify.Send("タスク完了", task.Title)
+					}
 				}
 			case "d":
 				if m.store != nil && m.taskCur < len(m.tasks) {
@@ -251,8 +256,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.paused && m.view == viewTimer {
 			m.remaining -= time.Second
 			if m.remaining <= 0 {
+				finishedPhase := m.phase
 				m.recordCompletion(true)
 				m.advancePhase()
+				go notify.Send("ポモドーロタイマー", finishedPhase.label()+"が終わりました。次は"+m.phase.label()+"です。")
 			}
 		}
 		return m, tick()
