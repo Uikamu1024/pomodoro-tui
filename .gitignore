@@ -1,0 +1,3 @@
+/pomodoro-tui
+*.db
+.DS_Store
