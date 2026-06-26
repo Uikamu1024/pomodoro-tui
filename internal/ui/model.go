@@ -76,7 +76,7 @@ func New(cfg config.Config, store *storage.Store) Model {
 	ti := textinput.New()
 	ti.Placeholder = "新しいタスクを入力..."
 	ti.CharLimit = 100
-	return Model{
+	m := Model{
 		cfg:       cfg,
 		store:     store,
 		phase:     phaseWork,
@@ -86,6 +86,10 @@ func New(cfg config.Config, store *storage.Store) Model {
 		progress:  p,
 		input:     ti,
 	}
+	if store != nil {
+		m.tasks, _ = store.ListTasks()
+	}
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -289,16 +293,41 @@ func (m Model) View() string {
 	}
 
 	body := fmt.Sprintf(
-		"%s\n\n  %s   [%s]\n\n%s\n\nサイクル: %d  (long breakまで %d/%d)\n\nspace: 一時停止/再開  n: スキップ  r: リセット  h: 履歴  q: 終了",
+		"%s\n\n  %s   [%s]\n%s\n\n%s\n\nサイクル: %d  (long breakまで %d/%d)\n\nspace: 一時停止/再開  n: スキップ  r: リセット  h: 履歴  q: 終了",
 		titleStyle.Render(m.phase.label()),
 		formatDuration(m.remaining),
 		status,
+		m.topTasksView(),
 		m.progress.ViewAs(pct),
 		m.cyclesDone,
 		m.cyclesDone%m.cfg.CyclesBeforeLong, m.cfg.CyclesBeforeLong,
 	) + "\n\nt: タスク一覧"
 
 	return lipgloss.NewStyle().Padding(1, 2).Render(body)
+}
+
+func (m Model) topTasksView() string {
+	header := lipgloss.NewStyle().Bold(true).Render("タスク (上位3件)")
+	if len(m.tasks) == 0 {
+		return "\n" + header + "\n  タスクはありません。't' で追加できます。"
+	}
+
+	var lines []string
+	count := 0
+	for _, t := range m.tasks {
+		if t.Done {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("  [ ] %s", t.Title))
+		count++
+		if count == 3 {
+			break
+		}
+	}
+	if count == 0 {
+		return "\n" + header + "\n  未完了のタスクはありません。"
+	}
+	return "\n" + lipgloss.JoinVertical(lipgloss.Left, append([]string{header}, lines...)...)
 }
 
 func (m Model) historyView() string {
